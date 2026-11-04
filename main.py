@@ -1,7 +1,10 @@
+
 import cv2
 import mediapipe as mp
 
-# Load MediaPipe Hand Landmarker
+from gesture_recognition import detect_fingers, recognize_gesture
+
+# MediaPipe configuration
 BaseOptions = mp.tasks.BaseOptions
 HandLandmarker = mp.tasks.vision.HandLandmarker
 HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
@@ -9,17 +12,15 @@ VisionRunningMode = mp.tasks.vision.RunningMode
 
 MODEL_PATH = "models/hand_landmarker.task"
 
-# Configure hand detection
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=MODEL_PATH),
     running_mode=VisionRunningMode.VIDEO,
-    num_hands=2,
+    num_hands=1,
     min_hand_detection_confidence=0.5,
     min_hand_presence_confidence=0.5,
     min_tracking_confidence=0.5
 )
 
-# Hand skeleton connections
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),
     (0, 5), (5, 6), (6, 7), (7, 8),
@@ -29,57 +30,49 @@ HAND_CONNECTIONS = [
     (0, 17)
 ]
 
-# Initialize webcam
 cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
     print("Could not access webcam.")
     exit()
 
-print("Hand detection started. Press Q to exit.")
+print("Gesture recognition started. Press Q to exit.")
 
 try:
     with HandLandmarker.create_from_options(options) as landmarker:
 
         while True:
+
             success, frame = cap.read()
 
             if not success:
                 break
 
-            # Mirror webcam
             frame = cv2.flip(frame, 1)
 
-            # Get frame dimensions
             height, width, _ = frame.shape
 
-            # Convert BGR to RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            # Convert to MediaPipe image
             mp_image = mp.Image(
                 image_format=mp.ImageFormat.SRGB,
                 data=rgb_frame
             )
 
-            # Generate timestamp in milliseconds
             timestamp_ms = int(
                 cv2.getTickCount() /
                 cv2.getTickFrequency() * 1000
             )
 
-            # Detect hand landmarks
             result = landmarker.detect_for_video(
                 mp_image,
                 timestamp_ms
             )
 
-            # Process detected hands
             if result.hand_landmarks:
 
                 for hand_landmarks in result.hand_landmarks:
 
-                    # Convert normalized coordinates to pixels
                     points = []
 
                     for landmark in hand_landmarks:
@@ -87,7 +80,7 @@ try:
                         y = int(landmark.y * height)
                         points.append((x, y))
 
-                    # Draw connections
+                    # Draw hand skeleton
                     for start, end in HAND_CONNECTIONS:
                         cv2.line(
                             frame,
@@ -97,7 +90,7 @@ try:
                             2
                         )
 
-                    # Draw landmark points
+                    # Draw landmarks
                     for point in points:
                         cv2.circle(
                             frame,
@@ -108,23 +101,38 @@ try:
                         )
 
                     # Highlight index fingertip
-                    index_tip = points[8]
-
                     cv2.circle(
                         frame,
-                        index_tip,
+                        points[8],
                         10,
                         (255, 0, 0),
                         -1
                     )
 
+                    # Detect raised fingers
+                    fingers = detect_fingers(hand_landmarks)
+
+                    # Recognize gesture
+                    gesture = recognize_gesture(fingers)
+
+                    # Display information
                     cv2.putText(
                         frame,
-                        "Hand Detected",
+                        f"Fingers: {fingers}",
                         (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 255, 0),
+                        0.7,
+                        (255, 255, 255),
+                        2
+                    )
+
+                    cv2.putText(
+                        frame,
+                        f"Gesture: {gesture}",
+                        (20, 80),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (0, 255, 255),
                         2
                     )
 
@@ -139,8 +147,10 @@ try:
                     2
                 )
 
-            # Display output
-            cv2.imshow("AI Virtual Whiteboard - Hand Tracking", frame)
+            cv2.imshow(
+                "AI Virtual Whiteboard - Gesture Recognition",
+                frame
+            )
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
