@@ -1,8 +1,9 @@
-
 import cv2
 import mediapipe as mp
+import numpy as np
 
 from gesture_recognition import detect_fingers, recognize_gesture
+from drawing import draw_line
 
 # MediaPipe configuration
 BaseOptions = mp.tasks.BaseOptions
@@ -30,13 +31,29 @@ HAND_CONNECTIONS = [
     (0, 17)
 ]
 
+# Initialize webcam
 cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
     print("Could not access webcam.")
     exit()
 
-print("Gesture recognition started. Press Q to exit.")
+# Get webcam dimensions
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+# Create blank drawing canvas
+canvas = np.zeros((height, width, 3), dtype=np.uint8)
+
+# Drawing variables
+previous_point = None
+drawing_color = (0, 255, 0)
+brush_thickness = 7
+
+print("Virtual Whiteboard Started!")
+print("Index finger: Draw")
+print("Index + Middle fingers: Pause")
+print("Press Q to exit")
 
 try:
     with HandLandmarker.create_from_options(options) as landmarker:
@@ -76,12 +93,15 @@ try:
                     points = []
 
                     for landmark in hand_landmarks:
+
                         x = int(landmark.x * width)
                         y = int(landmark.y * height)
+
                         points.append((x, y))
 
                     # Draw hand skeleton
                     for start, end in HAND_CONNECTIONS:
+
                         cv2.line(
                             frame,
                             points[start],
@@ -90,46 +110,46 @@ try:
                             2
                         )
 
-                    # Draw landmarks
-                    for point in points:
-                        cv2.circle(
-                            frame,
-                            point,
-                            5,
-                            (0, 0, 255),
-                            -1
-                        )
+                    # Detect fingers
+                    fingers = detect_fingers(hand_landmarks)
+
+                    gesture = recognize_gesture(fingers)
+
+                    # Get index fingertip
+                    current_point = points[8]
+
+                    # Drawing mode
+                    if gesture == "DRAW":
+
+                        if previous_point is not None:
+
+                            draw_line(
+                                canvas,
+                                previous_point,
+                                current_point,
+                                drawing_color,
+                                brush_thickness
+                            )
+
+                        previous_point = current_point
+
+                    else:
+                        # Stop drawing
+                        previous_point = None
 
                     # Highlight index fingertip
                     cv2.circle(
                         frame,
-                        points[8],
+                        current_point,
                         10,
                         (255, 0, 0),
                         -1
                     )
 
-                    # Detect raised fingers
-                    fingers = detect_fingers(hand_landmarks)
-
-                    # Recognize gesture
-                    gesture = recognize_gesture(fingers)
-
-                    # Display information
-                    cv2.putText(
-                        frame,
-                        f"Fingers: {fingers}",
-                        (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2
-                    )
-
                     cv2.putText(
                         frame,
                         f"Gesture: {gesture}",
-                        (20, 80),
+                        (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.8,
                         (0, 255, 255),
@@ -137,19 +157,14 @@ try:
                     )
 
             else:
-                cv2.putText(
-                    frame,
-                    "No Hand Detected",
-                    (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 0, 255),
-                    2
-                )
+                previous_point = None
+
+            # Combine webcam and drawing canvas
+            output = cv2.add(frame, canvas)
 
             cv2.imshow(
-                "AI Virtual Whiteboard - Gesture Recognition",
-                frame
+                "AI Virtual Whiteboard",
+                output
             )
 
             if cv2.waitKey(1) & 0xFF == ord('q'):

@@ -1,4 +1,3 @@
-
 def detect_fingers(hand_landmarks):
     """
     Detect which of the four fingers are raised.
