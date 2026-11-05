@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 
 from gesture_recognition import detect_fingers, recognize_gesture
-from drawing import draw_line
+from drawing import draw_line, clear_canvas
 
 # MediaPipe configuration
 BaseOptions = mp.tasks.BaseOptions
@@ -49,6 +49,15 @@ canvas = np.zeros((height, width, 3), dtype=np.uint8)
 previous_point = None
 drawing_color = (0, 255, 0)
 brush_thickness = 7
+
+previous_point = None
+
+drawing_color = (0, 255, 0)  # Green (BGR)
+color_name = "Green"
+
+brush_thickness = 7
+is_erasing = False
+eraser_thickness = 35
 
 print("Virtual Whiteboard Started!")
 print("Index finger: Draw")
@@ -119,22 +128,42 @@ try:
                     current_point = points[8]
 
                     # Drawing mode
+                    # if gesture == "DRAW":
+
+                    #     if previous_point is not None:
+
+                    #         draw_line(
+                    #             canvas,
+                    #             previous_point,
+                    #             current_point,
+                    #             drawing_color,
+                    #             brush_thickness
+                    #         )
+
+                    #     previous_point = current_point
+                    
+
+                    # else:
+                    #     # Stop drawing
+                    #     previous_point = None
+
                     if gesture == "DRAW":
 
-                        if previous_point is not None:
+                        active_color = (0, 0, 0) if is_erasing else drawing_color
+                        active_thickness = eraser_thickness if is_erasing else brush_thickness
 
+                        if previous_point is not None:
                             draw_line(
                                 canvas,
                                 previous_point,
                                 current_point,
-                                drawing_color,
-                                brush_thickness
+                                active_color,
+                                active_thickness
                             )
 
                         previous_point = current_point
 
                     else:
-                        # Stop drawing
                         previous_point = None
 
                     # Highlight index fingertip
@@ -159,6 +188,37 @@ try:
             else:
                 previous_point = None
 
+            tool_name = "ERASER" if is_erasing else "BRUSH"
+
+            cv2.putText(
+                frame,
+                f"Tool: {tool_name} | Color: {color_name} | Size: {brush_thickness}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2
+            )
+
+            cv2.putText(
+                frame,
+                "1: Green  2: Blue  3: Red  4: Yellow",
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 255, 255),
+                1
+            )
+
+            cv2.putText(
+                frame,
+                "E: Eraser  C: Clear  +/-: Brush Size  Q: Quit",
+                (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 255, 255),
+                1
+            )
             # Combine webcam and drawing canvas
             output = cv2.add(frame, canvas)
 
@@ -167,8 +227,51 @@ try:
                 output
             )
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            # if cv2.waitKey(1) & 0xFF == ord('q'):
+            #     break
+            key = cv2.waitKey(1) & 0xFF
+
+            # Quit
+            if key == ord('q'):
                 break
+
+            # Select colors
+            elif key == ord('1'):
+                drawing_color = (0, 255, 0)
+                color_name = "Green"
+                is_erasing = False
+
+            elif key == ord('2'):
+                drawing_color = (255, 0, 0)
+                color_name = "Blue"
+                is_erasing = False
+
+            elif key == ord('3'):
+                drawing_color = (0, 0, 255)
+                color_name = "Red"
+                is_erasing = False
+
+            elif key == ord('4'):
+                drawing_color = (0, 255, 255)
+                color_name = "Yellow"
+                is_erasing = False
+
+            # Toggle eraser
+            elif key == ord('e'):
+                is_erasing = not is_erasing
+
+            # Clear canvas
+            elif key == ord('c'):
+                clear_canvas(canvas)
+                previous_point = None
+
+            # Increase brush size
+            elif key in (ord('+'), ord('=')):
+                brush_thickness = min(50, brush_thickness + 2)
+
+            # Decrease brush size
+            elif key in (ord('-'), ord('_')):
+                brush_thickness = max(2, brush_thickness - 2)
 
 finally:
     cap.release()
